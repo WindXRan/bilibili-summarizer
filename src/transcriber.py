@@ -21,7 +21,7 @@ _HEADERS = {
     "Origin": "https://www.bilibili.com",
 }
 
-MODEL_SIZE = "tiny"
+MODEL_SIZE = "small"
 _output_dir: Path | None = None
 
 
@@ -88,35 +88,42 @@ def _format_segments(segments: list) -> str:
     import re
 
     raw = "".join(seg.text.strip() for seg in segments if seg.text.strip())
-    sents = re.split(r"(?<=[。！？])", raw)
-    sents = [s.strip() for s in sents if s.strip()]
 
-    if len(sents) <= 1:
-        sents = re.split(r"(?<=[，。！？])", raw)
-        sents = [s.strip() for s in sents if s.strip()]
+    phrases = re.split(r"(?<=[，。！？、；：])", raw)
+    phrases = [p.strip() for p in phrases if p.strip()]
 
-    if len(sents) <= 1:
-        sents = [raw[i:i+200] for i in range(0, len(raw), 200)]
+    if len(phrases) <= 1:
+        phrases = re.split(r"(?<=[，。！？、；：])", raw)
+        phrases = [p.strip() for p in phrases if p.strip()]
+
+    if len(phrases) <= 1:
+        phrases = [raw[i:i+30] for i in range(0, len(raw), 30)]
+
+    lines = []
+    for p in phrases:
+        if len(p) > 40:
+            for i in range(0, len(p), 30):
+                chunk = p[i:i+30]
+                lines.append(chunk)
+        else:
+            lines.append(p)
 
     paragraphs = []
-    buf = ""
-    for s in sents:
-        if not buf:
-            buf = s
-        elif len(buf) + len(s) < 200:
-            buf += s
+    buf = []
+    char_count = 0
+    for line in lines:
+        if char_count + len(line) > 200:
+            paragraphs.append("\n".join(buf))
+            buf = [line]
+            char_count = len(line)
         else:
-            paragraphs.append(buf)
-            buf = s
+            buf.append(line)
+            char_count += len(line)
     if buf:
-        if len(buf) < 30 and paragraphs:
-            paragraphs[-1] += buf
+        if len(buf) == 1 and len(buf[0]) < 10 and paragraphs:
+            paragraphs[-1] += "\n" + buf[0]
         else:
-            paragraphs.append(buf)
-
-    if len(paragraphs) > 1 and len(paragraphs[-1]) < 30:
-        paragraphs[-2] += paragraphs[-1]
-        paragraphs.pop()
+            paragraphs.append("\n".join(buf))
 
     return "\n\n".join(paragraphs) if paragraphs else raw
 
