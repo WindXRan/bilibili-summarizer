@@ -70,10 +70,11 @@ def _generate_audio(text: str, output_path: str) -> None:
     print(f"音频已保存: {output_path}", file=sys.stderr)
 
 
-def _default_path(info: dict) -> Path:
+def _default_path(info: dict, tag: str = "") -> Path:
     owner = _sanitize_filename(info.get("owner", {}).get("name", "unknown"))
     title = _sanitize_filename(info.get("title", "untitled"))
-    return PROJECT_DIR / owner / f"{title}.txt"
+    suffix = f"_{tag}" if tag else ""
+    return PROJECT_DIR / owner / f"{title}{suffix}.txt"
 
 
 def extract(bvid_or_url: str, output: str | None = None, force_asr: bool = False, tts: bool = False) -> str:
@@ -82,7 +83,8 @@ def extract(bvid_or_url: str, output: str | None = None, force_asr: bool = False
     title = info.get("title", "")
     cid = info["cid"]
 
-    if not output:
+    auto_path = not output
+    if auto_path:
         output = str(_default_path(info))
 
     if not force_asr:
@@ -90,25 +92,27 @@ def extract(bvid_or_url: str, output: str | None = None, force_asr: bool = False
         if subtitles:
             text = fetch_subtitle_text(subtitles[0]["subtitle_url"])
             result = f"# {title}\n\n来源: API字幕 | {bvid}\n\n---\n\n{text}"
-            Path(output).parent.mkdir(parents=True, exist_ok=True)
-            Path(output).write_text(result, encoding="utf-8")
-            if tts:
-                p = output.replace(".txt", ".mp3")
-                _generate_audio(text, p)
+            _save(result, output, auto_path, "字幕", tts, text)
             return result
         print("无可用字幕，切换到音频识别...", file=sys.stderr)
 
     print("下载音频中...", file=sys.stderr)
     text = transcribe_bvid(bvid)
     result = f"# {title}\n\n来源: 音频识别 (Whisper) | {bvid}\n\n---\n\n{text}"
-
-    Path(output).parent.mkdir(parents=True, exist_ok=True)
-    Path(output).write_text(result, encoding="utf-8")
-    if tts:
-        p = output.replace(".txt", ".mp3")
-        _generate_audio(text, p)
+    _save(result, output, auto_path, "asr", tts, text)
 
     return result
+
+
+def _save(result: str, output: str, auto_path: bool, tag: str, tts: bool, text: str) -> None:
+    out = Path(output)
+    if auto_path:
+        out = out.with_stem(out.stem + f"_{tag}")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(result, encoding="utf-8")
+    if tts:
+        p = out.with_suffix(".mp3")
+        _generate_audio(text, str(p))
 
 
 def main():
