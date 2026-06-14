@@ -85,29 +85,40 @@ def _format_segments(segments: list) -> str:
     if not segments:
         return ""
 
+    import re
+
+    raw = "".join(seg.text.strip() for seg in segments if seg.text.strip())
+    sents = re.split(r"(?<=[。！？])", raw)
+    sents = [s.strip() for s in sents if s.strip()]
+
+    if len(sents) <= 1:
+        sents = re.split(r"(?<=[，。！？])", raw)
+        sents = [s.strip() for s in sents if s.strip()]
+
+    if len(sents) <= 1:
+        sents = [raw[i:i+200] for i in range(0, len(raw), 200)]
+
     paragraphs = []
-    current = []
-    char_count = 0
+    buf = ""
+    for s in sents:
+        if not buf:
+            buf = s
+        elif len(buf) + len(s) < 200:
+            buf += s
+        else:
+            paragraphs.append(buf)
+            buf = s
+    if buf:
+        if len(buf) < 30 and paragraphs:
+            paragraphs[-1] += buf
+        else:
+            paragraphs.append(buf)
 
-    for i, seg in enumerate(segments):
-        text = seg.text.strip()
-        if not text:
-            continue
+    if len(paragraphs) > 1 and len(paragraphs[-1]) < 30:
+        paragraphs[-2] += paragraphs[-1]
+        paragraphs.pop()
 
-        current.append(text)
-        char_count += len(text)
-
-        gap_to_next = segments[i + 1].start - seg.end if i < len(segments) - 1 else 0
-
-        if gap_to_next > 0.8 or char_count > 150:
-            paragraphs.append("".join(current))
-            current = []
-            char_count = 0
-
-    if current:
-        paragraphs.append("".join(current))
-
-    return "\n\n".join(paragraphs)
+    return "\n\n".join(paragraphs) if paragraphs else raw
 
 
 def cleanup() -> None:

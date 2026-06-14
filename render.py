@@ -24,23 +24,8 @@ font-family:"Microsoft YaHei","PingFang SC",sans-serif;overflow:hidden}}
 
 
 def _split_slides(text: str) -> list[str]:
-    slides = []
-    for p in text.strip().split("\n\n"):
-        p = p.strip().strip('"').strip("'").strip()
-        if p:
-            slides.append(p)
-    merged = []
-    buf = ""
-    for s in slides:
-        if len(buf) + len(s) < 60:
-            buf = (buf + "\n\n" + s).strip()
-        else:
-            if buf:
-                merged.append(buf)
-            buf = s
-    if buf:
-        merged.append(buf)
-    return merged if merged else [text.strip()]
+    slides = [p.strip() for p in text.strip().split("\n\n") if p.strip()]
+    return slides if slides else [text.strip()]
 
 
 def _font_size(text_len: int) -> int:
