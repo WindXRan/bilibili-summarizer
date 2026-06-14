@@ -47,14 +47,22 @@ def _gen_html(slides: list[str], out_dir: Path) -> list[Path]:
 
 
 async def _gen_audio(text: str, out_path: Path) -> float:
-    communicate = edge_tts.Communicate(text, TTS_VOICE)
-    await communicate.save(str(out_path))
-    result = subprocess.run(
+    for attempt in range(3):
+        try:
+            communicate = edge_tts.Communicate(text, TTS_VOICE)
+            await communicate.save(str(out_path))
+            break
+        except Exception as e:
+            if attempt < 2:
+                await asyncio.sleep(2)
+            else:
+                raise e
+    r = subprocess.run(
         ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
          "-of", "csv=p=0", str(out_path)],
         capture_output=True, text=True,
     )
-    return float(result.stdout.strip())
+    return float(r.stdout.strip())
 
 
 def _screenshot(html_paths: list[Path], out_dir: Path) -> list[Path]:
@@ -98,7 +106,6 @@ def _make_video(
 
 def render(input_file: str, output: str | None = None, voice: str | None = None, sentence_mode: bool = False):
     text = Path(input_file).read_text(encoding="utf-8")
-    # Strip the metadata header lines
     lines = text.split("\n")
     content_lines = [l for l in lines if not l.startswith("#") and not l.startswith("来源") and not l.startswith("---")]
     clean = "\n".join(content_lines).strip()
@@ -111,7 +118,7 @@ def render(input_file: str, output: str | None = None, voice: str | None = None,
         global TTS_VOICE
         TTS_VOICE = voice
 
-    out_name = output or (Path(input_file).stem + ".mp4")
+    out_name = output or (Path(input_file).with_suffix(".mp4"))
     out_path = Path(out_name)
     tmp = Path(tempfile.mkdtemp(prefix="render_"))
 
@@ -119,23 +126,27 @@ def render(input_file: str, output: str | None = None, voice: str | None = None,
     slides = _split_slides(clean, sentence_mode)
     print(f"  共 {len(slides)} 页", file=sys.stderr)
 
-    print("2/5 生成HTML...", file=sys.stderr)
+    print("2/5 生成HTML + 截图...", file=sys.stderr)
     html_paths = _gen_html(slides, tmp)
-
-    print("3/5 生成配音...", file=sys.stderr)
-    audio_path = tmp / "audio.mp3"
-    audio_dur = asyncio.run(_gen_audio(clean, audio_path))
-    print(f"  音频 {audio_dur:.1f}s", file=sys.stderr)
-
-    print("4/5 截图...", file=sys.stderr)
     img_paths = _screenshot(html_paths, tmp)
 
+    print("3/5 生成配音...", file=sys.stderr)
+    full_audio = tmp / "audio_full.mp3"
+    total_dur = asyncio.run(_gen_audio(clean, full_audio))
+    print(f"  音频 {total_dur:.1f}s", file=sys.stderr)
+
     total_chars = sum(len(s) for s in slides)
-    durations = [max(1.5, len(s) / total_chars * audio_dur) for s in slides]
+    durations = [max(1.2, len(s) / total_chars * total_dur) for s in slides]
+    # smooth: don't let adjacent slides differ by more than 2x
+    for i in range(1, len(durations)):
+        if durations[i] > durations[i-1] * 2:
+            durations[i] = durations[i-1] * 2
+        if durations[i-1] > durations[i] * 2:
+            durations[i-1] = durations[i] * 2
 
     print("5/5 合成视频...", file=sys.stderr)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    _make_video(tmp, "slide_*.png", audio_path, durations, out_path)
+    _make_video(tmp, "slide_*.png", full_audio, durations, out_path)
 
     shutil.rmtree(tmp, ignore_errors=True)
     print(f"完成: {out_path}", file=sys.stderr)
