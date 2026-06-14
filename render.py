@@ -23,8 +23,11 @@ font-family:"Microsoft YaHei","PingFang SC",sans-serif;overflow:hidden}}
 </style></head><body><div class="t">{text}</div></body></html>"""
 
 
-def _split_slides(text: str) -> list[str]:
-    slides = [p.strip() for p in text.strip().split("\n\n") if p.strip()]
+def _split_slides(text: str, sentence_mode: bool = False) -> list[str]:
+    if sentence_mode:
+        slides = [l.strip() for l in text.strip().split("\n") if l.strip()]
+    else:
+        slides = [p.strip() for p in text.strip().split("\n\n") if p.strip()]
     return slides if slides else [text.strip()]
 
 
@@ -93,7 +96,7 @@ def _make_video(
         Path(t).unlink(missing_ok=True)
 
 
-def render(input_file: str, output: str | None = None, voice: str | None = None):
+def render(input_file: str, output: str | None = None, voice: str | None = None, sentence_mode: bool = False):
     text = Path(input_file).read_text(encoding="utf-8")
     # Strip the metadata header lines
     lines = text.split("\n")
@@ -113,7 +116,7 @@ def render(input_file: str, output: str | None = None, voice: str | None = None)
     tmp = Path(tempfile.mkdtemp(prefix="render_"))
 
     print("1/5 切分幻灯片...", file=sys.stderr)
-    slides = _split_slides(clean)
+    slides = _split_slides(clean, sentence_mode)
     print(f"  共 {len(slides)} 页", file=sys.stderr)
 
     print("2/5 生成HTML...", file=sys.stderr)
@@ -140,12 +143,13 @@ def render(input_file: str, output: str | None = None, voice: str | None = None)
 
 def main():
     if len(sys.argv) < 2:
-        print("用法: python render.py <input.txt> [-o output.mp4] [--voice VOICE]")
+        print("用法: python render.py <input.txt> [-o output.mp4] [--voice VOICE] [--sentences]")
         sys.exit(1)
 
     input_file = sys.argv[1]
     output = None
     voice = None
+    sentence_mode = "--sentences" in sys.argv
     if "-o" in sys.argv:
         idx = sys.argv.index("-o")
         if idx + 1 < len(sys.argv):
@@ -155,7 +159,7 @@ def main():
         if idx + 1 < len(sys.argv):
             voice = sys.argv[idx + 1]
 
-    render(input_file, output, voice)
+    render(input_file, output, voice, sentence_mode)
 
 
 if __name__ == "__main__":

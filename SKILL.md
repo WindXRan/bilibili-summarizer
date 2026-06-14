@@ -5,14 +5,17 @@
 ## Workflow (完整链路)
 
 ```
-B站视频链接 → 提取文案 → 人工洗稿 → render视频(full pipeline)
-                                   └→ 后续可接入其他视频模板
+B站链接 → 提取文案 → AI洗稿(按prompts.md) → 渲染视频MP4
 ```
 
 ```
 提取:  B站链接 → API字幕? → 有 → 字幕JSON
-                          → 无 → 下载音频 → Whisper ASR → txt
-渲染:  txt → 切分幻灯片 → 生成HTML(黑底白字) → Playwright截图 → edge-tts配音 → ffmpeg合成 → MP4
+                          → 无 → 下载音频 → Whisper ASR → _asr.txt
+洗稿:  _asr.txt → 用 prompts.md 里的洗稿Prompt → _洗稿.txt
+切分:  _洗稿.txt → 用 prompts.md 里的切分Prompt → _分镜.json (可选)
+渲染:  _洗稿.txt → 切分幻灯片 → HTML截图 → 配音 → ffmpeg → MP4
+                     ︎ 逐句模式: --sentences (一句一画面)
+                     ︎ 段落模式: 默认 (空行分段)
 ```
 
 ## Prerequisites
@@ -39,16 +42,19 @@ python main.py <BV号或B站链接> --asr --tts
 python main.py <BV号或B站链接> -o my.txt
 ```
 
-## 渲染视频
+## 洗稿 & 渲染
 
-洗稿完成后，一键生成黑底白字视频：
+先用 AI 按 `prompts.md` 中的提示词洗稿，然后渲染：
 
 ```bash
-# 基本用法: 输入 txt → HTML截图 → 配音 → MP4
-python render.py "project/作者/视频标题.txt"
+# 段落模式 (默认, 每组空行=一页)
+python render.py "project/作者/标题_洗稿.txt"
+
+# 逐句模式 (每行=一页, 适合一句一画面)
+python render.py "project/作者/标题_洗稿.txt" --sentences
 
 # 指定输出路径和音色
-python render.py "project/作者/视频标题.txt" -o final.mp4 --voice zh-CN-YunxiNeural
+python render.py "project/作者/标题_洗稿.txt" -o final.mp4 --voice zh-CN-YunxiNeural
 ```
 
 ## 输出结构
