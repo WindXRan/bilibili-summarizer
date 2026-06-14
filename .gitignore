@@ -12,3 +12,4 @@ models/
 *.mp4
 *.srt
 tools/
+src/bilibili_cookies.txt
