@@ -1,9 +1,10 @@
-import json
 import re
 import sys
 from pathlib import Path
 
 import requests
+
+from .transcriber import transcribe_bvid
 
 
 API_VIEW = "https://api.bilibili.com/x/web-interface/view"
@@ -51,18 +52,25 @@ def fetch_subtitle_text(subtitle_url: str) -> str:
     return "\n".join(lines)
 
 
-def extract(bvid_or_url: str, output: str | None = None) -> str:
+def extract(bvid_or_url: str, output: str | None = None, force_asr: bool = False) -> str:
     bvid = parse_bvid(bvid_or_url)
     info = get_video_info(bvid)
     title = info.get("title", "")
     cid = info["cid"]
 
-    subtitles = get_subtitle_list(bvid, cid)
-    if not subtitles:
-        return f"视频「{title}」没有可用的字幕"
+    if not force_asr:
+        subtitles = get_subtitle_list(bvid, cid)
+        if subtitles:
+            text = fetch_subtitle_text(subtitles[0]["subtitle_url"])
+            result = f"# {title}\n\n来源: API字幕 | {bvid}\n\n---\n\n{text}"
+            if output:
+                Path(output).write_text(result, encoding="utf-8")
+            return result
+        print("无可用字幕，切换到音频识别...", file=sys.stderr)
 
-    text = fetch_subtitle_text(subtitles[0]["subtitle_url"])
-    result = f"# {title}\n\n{bvid}\n\n---\n\n{text}"
+    print("下载音频中...", file=sys.stderr)
+    text = transcribe_bvid(bvid)
+    result = f"# {title}\n\n来源: 音频识别 (Whisper) | {bvid}\n\n---\n\n{text}"
 
     if output:
         Path(output).write_text(result, encoding="utf-8")
@@ -72,18 +80,19 @@ def extract(bvid_or_url: str, output: str | None = None) -> str:
 
 def main():
     if len(sys.argv) < 2:
-        print("用法: python -m src.bilibili_text <BV号或B站链接> [-o output.txt]")
+        print("用法: python -m src.bilibili_text <BV号或B站链接> [-o output.txt] [--asr]")
         sys.exit(1)
 
     bvid_or_url = sys.argv[1]
     output = None
+    force_asr = "--asr" in sys.argv
     if "-o" in sys.argv:
         idx = sys.argv.index("-o")
         if idx + 1 < len(sys.argv):
             output = sys.argv[idx + 1]
 
     try:
-        result = extract(bvid_or_url, output)
+        result = extract(bvid_or_url, output, force_asr)
         print(result)
     except Exception as e:
         print(f"错误: {e}", file=sys.stderr)
