@@ -12,6 +12,10 @@ API_VIEW = "https://api.bilibili.com/x/web-interface/view"
 API_PLAYER = "https://api.bilibili.com/x/player/v2"
 
 TTS_VOICE = "zh-CN-XiaoxiaoNeural"
+PROJECT_DIR = Path("project")
+
+def _sanitize_filename(name: str) -> str:
+    return re.sub(r'[<>:"/\\|?*]', "", name).strip() or "untitled"
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -66,21 +70,30 @@ def _generate_audio(text: str, output_path: str) -> None:
     print(f"音频已保存: {output_path}", file=sys.stderr)
 
 
+def _default_path(info: dict) -> Path:
+    owner = _sanitize_filename(info.get("owner", {}).get("name", "unknown"))
+    title = _sanitize_filename(info.get("title", "untitled"))
+    return PROJECT_DIR / owner / f"{title}.txt"
+
+
 def extract(bvid_or_url: str, output: str | None = None, force_asr: bool = False, tts: bool = False) -> str:
     bvid = parse_bvid(bvid_or_url)
     info = get_video_info(bvid)
     title = info.get("title", "")
     cid = info["cid"]
 
+    if not output:
+        output = str(_default_path(info))
+
     if not force_asr:
         subtitles = get_subtitle_list(bvid, cid)
         if subtitles:
             text = fetch_subtitle_text(subtitles[0]["subtitle_url"])
             result = f"# {title}\n\n来源: API字幕 | {bvid}\n\n---\n\n{text}"
-            if output:
-                Path(output).write_text(result, encoding="utf-8")
+            Path(output).parent.mkdir(parents=True, exist_ok=True)
+            Path(output).write_text(result, encoding="utf-8")
             if tts:
-                p = output.replace(".txt", ".mp3") if output else f"{bvid}.mp3"
+                p = output.replace(".txt", ".mp3")
                 _generate_audio(text, p)
             return result
         print("无可用字幕，切换到音频识别...", file=sys.stderr)
@@ -89,10 +102,10 @@ def extract(bvid_or_url: str, output: str | None = None, force_asr: bool = False
     text = transcribe_bvid(bvid)
     result = f"# {title}\n\n来源: 音频识别 (Whisper) | {bvid}\n\n---\n\n{text}"
 
-    if output:
-        Path(output).write_text(result, encoding="utf-8")
+    Path(output).parent.mkdir(parents=True, exist_ok=True)
+    Path(output).write_text(result, encoding="utf-8")
     if tts:
-        p = output.replace(".txt", ".mp3") if output else f"{bvid}.mp3"
+        p = output.replace(".txt", ".mp3")
         _generate_audio(text, p)
 
     return result
