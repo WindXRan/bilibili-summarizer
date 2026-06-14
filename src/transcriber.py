@@ -16,8 +16,9 @@ API_VIEW = "https://api.bilibili.com/x/web-interface/view"
 API_PLAYURL = "https://api.bilibili.com/x/player/playurl"
 
 _HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Referer": "https://www.bilibili.com",
+    "Origin": "https://www.bilibili.com",
 }
 
 MODEL_SIZE = "tiny"
@@ -40,7 +41,7 @@ def download_audio(bvid: str) -> Path:
 
     raw_path = out / f"{bvid}.m4s"
 
-    with httpx.Client(headers=_HEADERS, follow_redirects=True, timeout=30, verify=False) as c:
+    with httpx.Client(headers=_HEADERS, follow_redirects=True, timeout=30) as c:
         info = c.get(API_VIEW, params={"bvid": bvid}).json()
         if info.get("code") != 0:
             raise RuntimeError(f"获取视频信息失败: {info.get('message')}")
@@ -65,15 +66,48 @@ def download_audio(bvid: str) -> Path:
     return wav_path
 
 
+def _get_model_dir() -> Path:
+    return Path(__file__).resolve().parent.parent / "models" / MODEL_SIZE
+
+
 def transcribe(audio_path: Path, language: str = "zh") -> str:
     model = WhisperModel(
         MODEL_SIZE,
         device="cpu",
         compute_type="int8",
-        download_root=str(get_output_dir() / "models"),
+        download_root=str(_get_model_dir()),
     )
     segments, _ = model.transcribe(str(audio_path), language=language, beam_size=1)
-    return "".join(seg.text for seg in segments)
+    return _format_segments(list(segments))
+
+
+def _format_segments(segments: list) -> str:
+    if not segments:
+        return ""
+
+    paragraphs = []
+    current = []
+    char_count = 0
+
+    for i, seg in enumerate(segments):
+        text = seg.text.strip()
+        if not text:
+            continue
+
+        current.append(text)
+        char_count += len(text)
+
+        gap_to_next = segments[i + 1].start - seg.end if i < len(segments) - 1 else 0
+
+        if gap_to_next > 0.8 or char_count > 150:
+            paragraphs.append("".join(current))
+            current = []
+            char_count = 0
+
+    if current:
+        paragraphs.append("".join(current))
+
+    return "\n\n".join(paragraphs)
 
 
 def cleanup() -> None:
