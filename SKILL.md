@@ -2,14 +2,17 @@
 
 从B站视频提取文本 —— 优先API字幕，无字幕则走 Whisper ASR。
 
-## Workflow
+## Workflow (完整链路)
 
 ```
-B站视频链接
-    │
-    ├── API字幕? → 有 → 直接拉取字幕JSON (秒级)
-    │
-    └── 无 → 下载音频流 → ffmpeg转WAV → Whisper ASR → 文本
+B站视频链接 → 提取文案 → 人工洗稿 → render视频(full pipeline)
+                                   └→ 后续可接入其他视频模板
+```
+
+```
+提取:  B站链接 → API字幕? → 有 → 字幕JSON
+                          → 无 → 下载音频 → Whisper ASR → txt
+渲染:  txt → 切分幻灯片 → 生成HTML(黑底白字) → Playwright截图 → edge-tts配音 → ffmpeg合成 → MP4
 ```
 
 ## Prerequisites
@@ -36,13 +39,26 @@ python main.py <BV号或B站链接> --asr --tts
 python main.py <BV号或B站链接> -o my.txt
 ```
 
+## 渲染视频
+
+洗稿完成后，一键生成黑底白字视频：
+
+```bash
+# 基本用法: 输入 txt → HTML截图 → 配音 → MP4
+python render.py "project/作者/视频标题.txt"
+
+# 指定输出路径和音色
+python render.py "project/作者/视频标题.txt" -o final.mp4 --voice zh-CN-YunxiNeural
+```
+
 ## 输出结构
 
 ```
 project/
   ├─ 作者名1/
-  │   ├─ 视频标题1.txt
-  │   ├─ 视频标题1.mp3
+  │   ├─ 视频标题1.txt     # 文案 (洗稿前/后)
+  │   ├─ 视频标题1.mp3     # TTS 配音
+  │   ├─ 视频标题1.mp4     # 渲染视频(黑底白字)
   │   ├─ 视频标题2.txt
   │   └─ ...
   └─ 作者名2/
