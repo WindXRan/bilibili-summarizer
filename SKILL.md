@@ -31,10 +31,14 @@ python main.py <BV号或B站链接> --asr
 
 # 保存到文件
 python main.py <BV号或B站链接> -o output.txt
+
+# 一键 TTS 转音频 (保存txt + mp3)
+python main.py <BV号或B站链接> --asr --tts -o output.txt
 ```
 
 ## 注意事项
 
 - **API字幕**: 有字幕的视频秒级返回
 - **ASR模式**: 首次运行会自动下载 Whisper 模型 (tiny, ~150MB)
+- **TTS模式**: `--tts` 自动调用 edge-tts 生成 MP3，默认音色 `zh-CN-XiaoxiaoNeural`
 - 只需下载音频流（几MB到几十MB），无需下载完整视频

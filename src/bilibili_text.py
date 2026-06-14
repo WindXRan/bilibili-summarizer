@@ -1,3 +1,4 @@
+import asyncio
 import re
 import sys
 from pathlib import Path
@@ -9,6 +10,8 @@ from .transcriber import transcribe_bvid
 
 API_VIEW = "https://api.bilibili.com/x/web-interface/view"
 API_PLAYER = "https://api.bilibili.com/x/player/v2"
+
+TTS_VOICE = "zh-CN-XiaoxiaoNeural"
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -52,7 +55,18 @@ def fetch_subtitle_text(subtitle_url: str) -> str:
     return "\n".join(lines)
 
 
-def extract(bvid_or_url: str, output: str | None = None, force_asr: bool = False) -> str:
+def _generate_audio(text: str, output_path: str) -> None:
+    try:
+        import edge_tts
+    except ImportError:
+        print("请先安装 edge-tts: pip install edge-tts", file=sys.stderr)
+        sys.exit(1)
+
+    asyncio.run(edge_tts.Communicate(text, TTS_VOICE).save(output_path))
+    print(f"音频已保存: {output_path}", file=sys.stderr)
+
+
+def extract(bvid_or_url: str, output: str | None = None, force_asr: bool = False, tts: bool = False) -> str:
     bvid = parse_bvid(bvid_or_url)
     info = get_video_info(bvid)
     title = info.get("title", "")
@@ -65,6 +79,9 @@ def extract(bvid_or_url: str, output: str | None = None, force_asr: bool = False
             result = f"# {title}\n\n来源: API字幕 | {bvid}\n\n---\n\n{text}"
             if output:
                 Path(output).write_text(result, encoding="utf-8")
+            if tts:
+                p = output.replace(".txt", ".mp3") if output else f"{bvid}.mp3"
+                _generate_audio(text, p)
             return result
         print("无可用字幕，切换到音频识别...", file=sys.stderr)
 
@@ -74,25 +91,29 @@ def extract(bvid_or_url: str, output: str | None = None, force_asr: bool = False
 
     if output:
         Path(output).write_text(result, encoding="utf-8")
+    if tts:
+        p = output.replace(".txt", ".mp3") if output else f"{bvid}.mp3"
+        _generate_audio(text, p)
 
     return result
 
 
 def main():
     if len(sys.argv) < 2:
-        print("用法: python -m src.bilibili_text <BV号或B站链接> [-o output.txt] [--asr]")
+        print("用法: python -m src.bilibili_text <BV号或B站链接> [-o output.txt] [--asr] [--tts]")
         sys.exit(1)
 
     bvid_or_url = sys.argv[1]
     output = None
     force_asr = "--asr" in sys.argv
+    do_tts = "--tts" in sys.argv
     if "-o" in sys.argv:
         idx = sys.argv.index("-o")
         if idx + 1 < len(sys.argv):
             output = sys.argv[idx + 1]
 
     try:
-        result = extract(bvid_or_url, output, force_asr)
+        result = extract(bvid_or_url, output, force_asr, do_tts)
         print(result)
     except Exception as e:
         print(f"错误: {e}", file=sys.stderr)
