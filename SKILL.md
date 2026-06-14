@@ -22,6 +22,8 @@ B站链接 → 提取文案 → AI洗稿(按prompts.md) → 渲染视频MP4
 
 ```bash
 pip install -r requirements.txt
+# GPU加速 (RTX 4060等N卡):
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 ```
 
 系统需安装 `ffmpeg` 并加入 PATH。
@@ -74,7 +76,11 @@ project/
 ## 注意事项
 
 - **API字幕**: 有字幕的视频秒级返回
-- **ASR模式**: 首次运行会自动下载 Whisper 模型 (tiny, ~150MB)
+- **ASR模式**: 首次运行会自动下载 Whisper 模型 (默认 small, ~500MB)
+- **GPU加速**: 有 N 卡会自动启用 CUDA；可在 `transcriber.py` 中调大模型:
+  - `large-v3-turbo` (RTX 4060 8GB 推荐): 接近最高精度, 速度快
+  - `large-v3`: 极致精度, 显存占用高
+  - `small` (默认): CPU/GPU 通用
 - **TTS模式**: `--tts` 自动调用 edge-tts 生成 MP3，默认音色 `zh-CN-XiaoxiaoNeural`
 - **洗稿**: 提取后人工修改 txt，再用 edge-tts 转音频
 - 只需下载音频流（几MB到几十MB），无需下载完整视频
