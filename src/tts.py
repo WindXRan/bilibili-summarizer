@@ -1,8 +1,12 @@
 import asyncio
+import os
 import subprocess
 import sys
 from abc import ABC, abstractmethod
 from pathlib import Path
+
+
+os.environ.setdefault("AIODNS_PREFER_IPV6", "1")
 
 
 class TTS(ABC):
@@ -27,6 +31,7 @@ class EdgeTTS(TTS):
         self.voice = voice
 
     def synthesize(self, text: str, output_path: str) -> float:
+        os.environ["AIODNS_PREFER_IPV6"] = "1"
         try:
             import edge_tts
         except ImportError:
