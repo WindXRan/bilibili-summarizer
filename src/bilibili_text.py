@@ -1,4 +1,3 @@
-import asyncio
 import re
 import sys
 from pathlib import Path
@@ -6,13 +5,14 @@ from pathlib import Path
 import requests
 
 from .transcriber import transcribe_bvid
+from .tts import EdgeTTS
 
 
 API_VIEW = "https://api.bilibili.com/x/web-interface/view"
 API_PLAYER = "https://api.bilibili.com/x/player/v2"
 
-TTS_VOICE = "zh-CN-XiaoxiaoNeural"
 PROJECT_DIR = Path("project")
+_tts = EdgeTTS()
 
 def _sanitize_filename(name: str) -> str:
     return re.sub(r'[<>:"/\\|?*]', "", name).strip() or "untitled"
@@ -60,14 +60,7 @@ def fetch_subtitle_text(subtitle_url: str) -> str:
 
 
 def _generate_audio(text: str, output_path: str) -> None:
-    try:
-        import edge_tts
-    except ImportError:
-        print("请先安装 edge-tts: pip install edge-tts", file=sys.stderr)
-        sys.exit(1)
-
-    asyncio.run(edge_tts.Communicate(text, TTS_VOICE).save(output_path))
-    print(f"音频已保存: {output_path}", file=sys.stderr)
+    _tts.synthesize(text, output_path)
 
 
 def _default_path(info: dict, tag: str = "") -> Path:
@@ -117,7 +110,7 @@ def _save(result: str, output: str, auto_path: bool, tag: str, tts: bool, text: 
 
 def main():
     if len(sys.argv) < 2:
-        print("用法: python -m src.bilibili_text <BV号或B站链接> [-o output.txt] [--asr] [--tts]")
+        print("用法: python -m src.bilibili_text <BV号或B站链接> [-o output.txt] [--asr] [--tts] [--voice VOICE]")
         sys.exit(1)
 
     bvid_or_url = sys.argv[1]
@@ -128,6 +121,10 @@ def main():
         idx = sys.argv.index("-o")
         if idx + 1 < len(sys.argv):
             output = sys.argv[idx + 1]
+    if "--voice" in sys.argv:
+        idx = sys.argv.index("--voice")
+        if idx + 1 < len(sys.argv):
+            _tts.voice = sys.argv[idx + 1]
 
     try:
         result = extract(bvid_or_url, output, force_asr, do_tts)

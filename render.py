@@ -1,4 +1,3 @@
-import asyncio
 import math
 import shutil
 import subprocess
@@ -6,9 +5,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-import edge_tts
+from src.tts import EdgeTTS
 
-TTS_VOICE = "zh-CN-XiaoxiaoNeural"
+_tts = EdgeTTS()
 OUT_W = 1920
 OUT_H = 1080
 FPS = 30
@@ -46,23 +45,8 @@ def _gen_html(slides: list[str], out_dir: Path) -> list[Path]:
     return paths
 
 
-async def _gen_audio(text: str, out_path: Path) -> float:
-    for attempt in range(3):
-        try:
-            communicate = edge_tts.Communicate(text, TTS_VOICE)
-            await communicate.save(str(out_path))
-            break
-        except Exception as e:
-            if attempt < 2:
-                await asyncio.sleep(2)
-            else:
-                raise e
-    r = subprocess.run(
-        ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
-         "-of", "csv=p=0", str(out_path)],
-        capture_output=True, text=True,
-    )
-    return float(r.stdout.strip())
+def _gen_audio(text: str, out_path: Path) -> float:
+    return _tts.synthesize(text, str(out_path))
 
 
 def _screenshot(html_paths: list[Path], out_dir: Path) -> list[Path]:
@@ -115,8 +99,7 @@ def render(input_file: str, output: str | None = None, voice: str | None = None,
         sys.exit(1)
 
     if voice:
-        global TTS_VOICE
-        TTS_VOICE = voice
+        _tts.voice = voice
 
     out_name = output or (Path(input_file).with_suffix(".mp4"))
     out_path = Path(out_name)
@@ -132,7 +115,7 @@ def render(input_file: str, output: str | None = None, voice: str | None = None,
 
     print("3/5 生成配音...", file=sys.stderr)
     full_audio = tmp / "audio_full.mp3"
-    total_dur = asyncio.run(_gen_audio(clean, full_audio))
+    total_dur = _gen_audio(clean, full_audio)
     print(f"  音频 {total_dur:.1f}s", file=sys.stderr)
 
     total_chars = sum(len(s) for s in slides)
