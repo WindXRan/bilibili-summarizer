@@ -1,5 +1,6 @@
 import hashlib
 import json
+import random
 import re
 import sys
 import time
@@ -52,10 +53,16 @@ def _sign(params):
     return p
 
 
-def _api(url, params, retries=5):
+def _api(url, params, retries=10):
     for i in range(retries):
         signed = _sign(params)
-        r = SESSION.get(url, params=signed, timeout=15)
+        try:
+            r = SESSION.get(url, params=signed, timeout=15)
+        except requests.exceptions.ConnectionError as e:
+            print(f"  连接失败，等待重试 {i+1}/{retries}: {e}", file=sys.stderr)
+            time.sleep(min(10 * (2**i), 60))
+            _WBI_CACHE.pop("keys", None)
+            continue
         try:
             d = r.json()
         except Exception:
@@ -64,7 +71,7 @@ def _api(url, params, retries=5):
             return d
         msg = d.get("message", "")
         if d.get("code") == -799:
-            t = min(30 * (2**i), 120)
+            t = min(30 * (2**i), 300)
             print(f"  限频，等待 {t}s...", file=sys.stderr)
             time.sleep(t)
         elif d.get("code") == -352:
@@ -104,25 +111,25 @@ def init(cookie: str = ""):
 
 
 def get_all_bvs(mid):
-    d = _api("https://api.bilibili.com/x/space/arc/search", {"mid": mid, "ps": "50", "pn": "1"})
+    d = _api("https://api.bilibili.com/x/space/arc/search", {"mid": mid, "ps": "30", "pn": "1"})
     if not d:
         return []
     page = d.get("data", {}).get("page", {})
     total = page.get("count", 0)
-    pages = (total + 49) // 50 if total else 1
+    pages = (total + 29) // 30 if total else 1
     vlist = d.get("data", {}).get("list", {}).get("vlist", [])
     bvs = [{"bvid": v["bvid"], "title": v["title"]} for v in vlist]
     print(f"  第1页: {len(vlist)}个 (共{total}个)", file=sys.stderr)
     for pn in range(2, pages + 1):
-        d = _api("https://api.bilibili.com/x/space/arc/search", {"mid": mid, "ps": "50", "pn": str(pn)})
+        d = _api("https://api.bilibili.com/x/space/arc/search", {"mid": mid, "ps": "30", "pn": str(pn)})
         if not d:
             break
         vlist = d.get("data", {}).get("list", {}).get("vlist", [])
         bvs.extend({"bvid": v["bvid"], "title": v["title"]} for v in vlist)
         print(f"  第{pn}页: {len(vlist)}个", file=sys.stderr)
-        if len(vlist) < 50:
+        if len(vlist) < 30:
             break
-        time.sleep(1.5)
+        time.sleep(random.uniform(3, 6))
     return bvs
 
 

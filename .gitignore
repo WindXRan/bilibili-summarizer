@@ -13,3 +13,5 @@ models/
 *.srt
 tools/
 src/bilibili_cookies.txt
+gpt_sovits/
+third_party/
